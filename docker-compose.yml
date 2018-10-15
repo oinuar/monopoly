@@ -1,0 +1,7 @@
+version: "3"
+services:
+  game:
+    command: cabal run
+    build: .
+    volumes:
+      - ./src:/usr/src/monopoly/src
