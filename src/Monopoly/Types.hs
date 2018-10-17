@@ -5,7 +5,7 @@ import qualified Data.Array as Array
 
 type Money = Float
 type PlayerID = Int
-type BoardIndex = Integer
+type BoardUnit = Integer
 type PlotName = String
 
 -- Each plot is grouped by a color. Groups can be sorted from cheapest to most expensive.
@@ -34,9 +34,9 @@ data Cell = Go Money
           | Change
           | IncomeTax Money
           | LuxuryTax Money
+          | GoToJail
           | VisitJail
           | FreeParking
-          | GoToJail
           deriving Eq
 
 -- Plots can be bought. If a plot is owned by a player, all other players have to pay rent if they visit the plot.
@@ -48,27 +48,72 @@ data PlotOwnership = FreePlot Money
 
 -- Community chest cards are most likely to give you money.
 data CommunityChestCard =
-                          -- Get out of Jail Free. This card may be kept until needed, or traded/sold.
+                        -- Get out of Jail Free. This card may be kept until needed, or traded/sold.
                           GetOutOfJailFreeCC
 
-                          -- Go to Jaill. Go directly to Jail. Do not pass GO, do not collect $200.
+                        -- Go to Jaill. Go directly to Jail. Do not pass GO, do not collect $200.
                         | GoToJailCC
                         deriving (Eq, Enum, Bounded)
 
 -- Change cards are more likely to move players, often with lethal consequences.
 data ChangeCard =
-                  -- Get out of Jail Free. This card may be kept until needed, or traded/sold.
+                -- Get out of Jail Free. This card may be kept until needed, or traded/sold.
                   GetOutOfJailFreeC
 
-                  -- Go to Jaill. Go directly to Jail. Do not pass GO, do not collect $200.
+                -- Go to Jaill. Go directly to Jail. Do not pass GO, do not collect $200.
                 | GoToJailC
                 deriving (Eq, Enum, Bounded)
+
+-- Actions that can be taken in a game.
+data Action =
+
+            -- Throws a dice.
+              ThrowDice PlayerID
+
+            -- Receives money.
+            | ReceiveMoney PlayerID Money
+
+            -- Gives money.
+            | GiveMoney PlayerID Money
+
+            -- Buys a plot at given board index.
+            | BuyPlot PlayerID BoardUnit
+
+            -- Buys a house for a plot at given board index.
+            | BuyHouse PlayerID BoardUnit
+
+            -- Buys a hotel for a plot at given board index.
+            | BuyHotel PlayerID BoardUnit
+
+            -- Pays plot rent.
+            | PayRent PlayerID BoardUnit
+
+            -- Draws community chest card from deck.
+            | DrawCommunityChestCard PlayerID
+
+            -- Draws change card from deck.
+            | DrawChangeCard PlayerID
+
+            -- Keeps community chest card that was drawn from the deck.
+            | KeepCommunityChestCard PlayerID CommunityChestCard
+
+            -- Keeps change card that was drawn from the deck.
+            | KeepChangeCard PlayerID ChangeCard
+
+            -- Uses previously kept community chest card and puts it back to deck.
+            | UseCommunityChestCard PlayerID CommunityChestCard
+
+            -- Uses previously kept change card and puts it back to deck.
+            | UseChangeCard PlayerID ChangeCard
+
+            -- Stays in jail.
+            | StayInJail PlayerID
 
 -- Player data contains where the player is located at the board,
 -- how much money he/she has and what cards (community chest or change)
 -- the player is currently holding.
 data Player = Player
-   { location :: BoardIndex
+   { location :: BoardUnit
    , bankBalance :: Money
    , heldCommunityChestCards :: [CommunityChestCard]
    , heldChangeCards :: [ChangeCard] }
@@ -76,7 +121,7 @@ data Player = Player
 -- Game board contains the game state. It will change during the game to reflect game actions.
 data Board = Board
    -- Board structure.
-   { cells :: Array.Array BoardIndex Cell
+   { cells :: Array.Array BoardUnit Cell
 
    -- Deck for community chest cards.
    , communityChestCards :: [CommunityChestCard]

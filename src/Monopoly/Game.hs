@@ -1,8 +1,66 @@
-module Monopoly.Game (mkBoard) where
+module Monopoly.Game (evalMonopoly, runMonopoly, mkBoard) where
 
 import Monopoly.Types
-import Data.Array (listArray)
-import Data.Map (fromList)
+import Control.Monad.Trans.State
+import Data.Array
+import qualified Data.Map as Map
+
+type Monopoly = State Board
+
+-- Action planner that generates possible actions in current situation.
+evalMonopoly :: Enum a => a -> Monopoly [Action]
+evalMonopoly player = do
+   board <- get
+
+   let playerId = fromEnum player
+
+   return $ case Map.lookup playerId $ players board of
+
+      -- Evaluate cell actions for player.
+      Just x -> let loc = location x
+                in cellActions playerId loc $ cells board ! loc
+
+      -- Unknown player, no actions.
+      _ -> []
+
+cellActions :: PlayerID -> BoardUnit -> Cell -> [Action]
+cellActions player loc (Go x) =
+   [ ReceiveMoney player x ]
+
+cellActions player loc (Plot (FreePlot x) _ group) =
+   [ BuyPlot player loc ]
+
+cellActions player loc (ElectricCompany (FreePlot x)) =
+   [ BuyPlot player loc ]
+
+cellActions player loc (WaterWorks (FreePlot x)) =
+   [ BuyPlot player loc ]
+
+cellActions player loc (Railroad (FreePlot x) _) =
+   [ BuyPlot player loc ]
+
+cellActions player _ CommunityChest =
+   [ DrawCommunityChestCard player ]
+
+cellActions player _ Change =
+   [ DrawChangeCard player ]
+
+cellActions player _ (IncomeTax x) =
+   [ GiveMoney player x ]
+
+cellActions player _ (LuxuryTax x) =
+   [ GiveMoney player x ]
+
+cellActions player _ GoToJail =
+   [ StayInJail player ]
+
+cellActions _ _ _ =
+   []
+
+-- Runs an action.
+runMonopoly :: Action -> Monopoly ()
+runMonopoly _ =
+   error "not implemented"
 
 mkBoard :: Enum a => a -> Board
 mkBoard firstPlayer =
@@ -58,7 +116,7 @@ mkBoard firstPlayer =
       -- TODO: shuffle change cards.
       , changeCards = [ (minBound :: ChangeCard).. ]
 
-      , players = fromList $ map (mkPlayer . fromEnum) [ firstPlayer.. ] }
+      , players = Map.fromList $ map (mkPlayer . fromEnum) [ firstPlayer.. ] }
 
 mkPlayer :: PlayerID -> (PlayerID, Player)
 mkPlayer =
