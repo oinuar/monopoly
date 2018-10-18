@@ -3,69 +3,180 @@ module Monopoly.Game (evalMonopoly, runMonopoly, mkBoard) where
 import Monopoly.Types
 import Control.Monad.Trans.State
 import Data.Array
+import System.Random
+import Control.Monad (mapM_)
+import Data.List (splitAt, partition)
 import qualified Data.Map as Map
 
 type Monopoly = State Board
 
--- Action planner that generates possible actions in current situation.
 evalMonopoly :: Enum a => a -> Monopoly [Action]
+
+-- Action planner that generates possible actions in current situation.
 evalMonopoly player = do
-   board <- get
-
    let playerId = fromEnum player
+   player <- getPlayer playerId
 
-   return $ case Map.lookup playerId $ players board of
+   let loc = locationOf player
+   cell <- getCell loc
 
-      -- Evaluate cell actions for player.
-      Just x -> let loc = location x
-                in cellActions playerId loc $ cells board ! loc
+   return $ mapCellActions playerId loc cell ++ mapPlayerActions playerId player
 
-      -- Unknown player, no actions.
-      _ -> []
+mapCellActions :: PlayerID -> BoardUnit -> Cell -> [Action]
+mapCellActions player loc (Go x) =
+   [ BankTransaction player x ]
 
-cellActions :: PlayerID -> BoardUnit -> Cell -> [Action]
-cellActions player loc (Go x) =
-   [ ReceiveMoney player x ]
-
-cellActions player loc (Plot (FreePlot x) _ group) =
+mapCellActions player loc (Plot (FreePlot x) _ group) =
    [ BuyPlot player loc ]
 
-cellActions player loc (ElectricCompany (FreePlot x)) =
+mapCellActions player loc (ElectricCompany (FreePlot x)) =
    [ BuyPlot player loc ]
 
-cellActions player loc (WaterWorks (FreePlot x)) =
+mapCellActions player loc (WaterWorks (FreePlot x)) =
    [ BuyPlot player loc ]
 
-cellActions player loc (Railroad (FreePlot x) _) =
+mapCellActions player loc (Railroad (FreePlot x) _) =
    [ BuyPlot player loc ]
 
-cellActions player _ CommunityChest =
+mapCellActions player _ CommunityChest =
    [ DrawCommunityChestCard player ]
 
-cellActions player _ Change =
+mapCellActions player _ Change =
    [ DrawChangeCard player ]
 
-cellActions player _ (IncomeTax x) =
-   [ GiveMoney player x ]
+mapCellActions player _ (IncomeTax x) =
+   [ BankTransaction player (-x) ]
 
-cellActions player _ (LuxuryTax x) =
-   [ GiveMoney player x ]
+mapCellActions player _ (LuxuryTax x) =
+   [ BankTransaction player (-x) ]
 
-cellActions player _ GoToJail =
+mapCellActions player _ GoToJail =
    [ StayInJail player ]
 
-cellActions _ _ _ =
+mapCellActions _ _ _ =
    []
 
--- Runs an action.
-runMonopoly :: Action -> Monopoly ()
-runMonopoly _ =
-   error "not implemented"
+mapPlayerActions :: PlayerID -> Player -> [Action]
+mapPlayerActions playerId player =
+   let communityChestCards = communityChestCardsHeldBy player
+       changeCards = changeCardsHeldBy player
+
+   -- TODO: determine which cards can be kept and which kept cards can
+   -- be used.
+   in []
+
+
+runMonopoly :: RandomGen g => g -> Action-> Monopoly g
+
+-- Throws dice and moves player to correct location.
+runMonopoly g (ThrowDice playerId) = do
+   player <- getPlayer playerId
+
+   let loc = locationOf player
+   let (number, g') = randomR (1, 6) g
+
+   -- Restore all player cards that are not kept back to deck.
+   restoreCommunityChestCardsToDeck playerId
+   restoreChangeCardsToDeck playerId
+
+   -- Move player to correct cell.
+   mapM_ (move playerId) $ tail [ loc .. (loc + number) ]
+   return g'
+
+-- Executes bank transaction that changes player's bank balance.
+runMonopoly g (BankTransaction playerId amount) = do
+   modifyPlayer playerId $ \x -> x { bankBalanceOf = bankBalanceOf x + amount }
+   return g
+
+-- Draws community chest card from deck.
+runMonopoly g (DrawCommunityChestCard playerId) = do
+   deck <- gets communityChestCardsOf
+   let (i, g') = randomR (0, length deck - 1) g
+
+   -- Split deck to two at random location.
+   let (lowDeck, highDeck) = splitAt i deck
+
+   -- Take element from high deck and make a new deck.
+   modify $ \x -> x { communityChestCardsOf = lowDeck ++ tail highDeck }
+
+   -- Give card that is on top of high deck to player.
+   modifyPlayer playerId $ \x -> x { communityChestCardsHeldBy = (HoldCard $ head highDeck) : (communityChestCardsHeldBy x) }
+   return g'
+
+-- Draws change card from deck.
+runMonopoly g (DrawChangeCard playerId) = do
+   deck <- gets changeCardsOf
+   let (i, g') = randomR (0, length deck - 1) g
+
+   -- Split deck to two at random location.
+   let (lowDeck, highDeck) = splitAt i deck
+
+   -- Take element from high deck and make a new deck.
+   modify $ \x -> x { changeCardsOf = lowDeck ++ tail highDeck }
+
+   -- Give card that is on top of high deck to player.
+   modifyPlayer playerId $ \x -> x { changeCardsHeldBy = (HoldCard $ head highDeck) : (changeCardsHeldBy x) }
+   return g'
+
+-- Keeps community chest card for later use.
+runMonopoly g (KeepCommunityChestCard playerId card) = do
+   modifyPlayer playerId $ \x -> x { communityChestCardsHeldBy = map (keepCard card) (communityChestCardsHeldBy x) }
+   return g
+
+-- Keeps change card for later use.
+runMonopoly g (KeepChangeCard playerId card) = do
+   modifyPlayer playerId $ \x -> x { changeCardsHeldBy = map (keepCard card) (changeCardsHeldBy x) }
+   return g
+
+restoreCommunityChestCardsToDeck :: PlayerID -> Monopoly ()
+restoreCommunityChestCardsToDeck playerId = do
+   player <- getPlayer playerId
+   let (heldCards, keptCards) = partition isHoldingCard $ communityChestCardsHeldBy player
+
+   modifyPlayer playerId $ \x -> x { communityChestCardsHeldBy = keptCards }
+   modify $ \x -> x { communityChestCardsOf = communityChestCardsOf x ++ map card heldCards }
+
+restoreChangeCardsToDeck :: PlayerID -> Monopoly ()
+restoreChangeCardsToDeck playerId = do
+   player <- getPlayer playerId
+   let (heldCards, keptCards) = partition isHoldingCard $ changeCardsHeldBy player
+
+   modifyPlayer playerId $ \x -> x { changeCardsHeldBy = keptCards }
+   modify $ \x -> x { changeCardsOf = changeCardsOf x ++ map card heldCards }
+
+move :: PlayerID -> BoardUnit -> Monopoly Cell
+move playerId units = do
+   i <- wrap units
+   modifyPlayer playerId $ \x -> x { locationOf = i }
+   getCell i
+
+getCell :: BoardUnit -> Monopoly Cell
+getCell units = do
+   cells <- gets cellsOf
+   return $ cells ! units
+
+getPlayer :: PlayerID -> Monopoly Player
+getPlayer playerId = do
+   availablePlayers <- gets playersOf
+
+   case Map.lookup playerId availablePlayers of
+      Just x -> return x
+      _ -> fail "Unknown player"
+
+modifyPlayer :: PlayerID -> (Player -> Player) -> Monopoly ()
+modifyPlayer playerId f = do
+   player <- getPlayer playerId
+   modify $ \x -> x { playersOf = Map.update (Just . f) playerId $ playersOf x }
+
+wrap :: BoardUnit -> Monopoly BoardUnit
+wrap units = do
+   cells <- gets cellsOf
+   return $ units `mod` (snd $ bounds cells)
 
 mkBoard :: Enum a => a -> Board
 mkBoard firstPlayer =
    Board
-      { cells = listArray (1, 40)
+      { cellsOf = listArray (1, 40)
          [ Go 2000
          , Plot (FreePlot 60) "Mediter-Ranean Avenue" Brown
          , CommunityChest
@@ -110,18 +221,16 @@ mkBoard firstPlayer =
          , LuxuryTax 100
          , Plot (FreePlot 400) "Boardwalk" Blue ]
 
-      -- TODO: shuffle community chest cards.
-      , communityChestCards = [ (minBound :: CommunityChestCard).. ]
+      , communityChestCardsOf = [ (minBound :: CommunityChestCard).. ]
 
-      -- TODO: shuffle change cards.
-      , changeCards = [ (minBound :: ChangeCard).. ]
+      , changeCardsOf = [ (minBound :: ChangeCard).. ]
 
-      , players = Map.fromList $ map (mkPlayer . fromEnum) [ firstPlayer.. ] }
+      , playersOf = Map.fromList $ map (mkPlayer . fromEnum) [ firstPlayer.. ] }
 
 mkPlayer :: PlayerID -> (PlayerID, Player)
 mkPlayer =
    flip (,) $ Player
-      { location = 1
-      , bankBalance = 15000
-      , heldCommunityChestCards = []
-      , heldChangeCards = [] }
+      { locationOf = 1
+      , bankBalanceOf = 15000
+      , communityChestCardsHeldBy = []
+      , changeCardsHeldBy = [] }

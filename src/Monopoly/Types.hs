@@ -70,11 +70,8 @@ data Action =
             -- Throws a dice.
               ThrowDice PlayerID
 
-            -- Receives money.
-            | ReceiveMoney PlayerID Money
-
-            -- Gives money.
-            | GiveMoney PlayerID Money
+            -- Receives or gives out money.
+            | BankTransaction PlayerID Money
 
             -- Buys a plot at given board index.
             | BuyPlot PlayerID BoardUnit
@@ -109,25 +106,61 @@ data Action =
             -- Stays in jail.
             | StayInJail PlayerID
 
+-- When player draws a card from deck, he/she first holds the card and
+-- then can decide to keep it for later use.
+data PlayerCard a = HoldCard a
+                  | KeepCard a
+
 -- Player data contains where the player is located at the board,
 -- how much money he/she has and what cards (community chest or change)
 -- the player is currently holding.
 data Player = Player
-   { location :: BoardUnit
-   , bankBalance :: Money
-   , heldCommunityChestCards :: [CommunityChestCard]
-   , heldChangeCards :: [ChangeCard] }
+   { locationOf :: BoardUnit
+   , bankBalanceOf :: Money
+   , communityChestCardsHeldBy :: [ PlayerCard CommunityChestCard ]
+   , changeCardsHeldBy :: [ PlayerCard ChangeCard ] }
 
 -- Game board contains the game state. It will change during the game to reflect game actions.
 data Board = Board
+
    -- Board structure.
-   { cells :: Array.Array BoardUnit Cell
+   { cellsOf :: Array.Array BoardUnit Cell
 
    -- Deck for community chest cards.
-   , communityChestCards :: [CommunityChestCard]
+   , communityChestCardsOf :: [ CommunityChestCard ]
 
    -- Deck for change cards.
-   , changeCards :: [ChangeCard]
+   , changeCardsOf :: [ ChangeCard ]
 
    -- Maps player IDs to player data.
-   , players :: Map.Map PlayerID Player }
+   , playersOf :: Map.Map PlayerID Player }
+
+isHoldingCard :: PlayerCard a -> Bool
+isHoldingCard HoldCard{} =
+   True
+
+isHoldingCard _ =
+   False
+
+card :: PlayerCard a -> a
+card (HoldCard x) =
+   x
+
+card (KeepCard x) =
+   x
+
+holdCard :: Eq a => a -> PlayerCard a -> PlayerCard a
+holdCard x0 (KeepCard x1)
+   | x0 == x1 = HoldCard x1
+   | otherwise = KeepCard x1
+
+holdCard _ x =
+   x
+
+keepCard :: Eq a => a -> PlayerCard a -> PlayerCard a
+keepCard x0 (HoldCard x1)
+   | x0 == x1 = KeepCard x1
+   | otherwise = HoldCard x1
+
+keepCard _ x =
+   x
