@@ -4,7 +4,7 @@ import Monopoly.Types
 import Control.Monad.Trans.State
 import Data.Array
 import System.Random
-import Control.Monad (mapM_)
+import Control.Monad (mapM, foldM)
 import Data.List (splitAt, partition)
 import qualified Data.Map as Map
 
@@ -20,40 +20,44 @@ evalMonopoly player = do
    let loc = locationOf player
    cell <- getCell loc
 
-   return $ mapCellActions playerId loc cell ++ mapPlayerActions playerId player
+   return $ mapExplicitCellActions playerId loc cell ++ mapPlayerActions playerId player
 
-mapCellActions :: PlayerID -> BoardUnit -> Cell -> [Action]
-mapCellActions player loc (Go x) =
-   [ BankTransaction player x ]
+mapExplicitCellActions :: PlayerID -> BoardUnit -> Cell -> [Action]
+mapExplicitCellActions playerId loc (Plot (FreePlot x) _ group) =
+   [ BuyPlot playerId loc ]
 
-mapCellActions player loc (Plot (FreePlot x) _ group) =
-   [ BuyPlot player loc ]
+mapExplicitCellActions playerId loc (ElectricCompany (FreePlot x)) =
+   [ BuyPlot playerId loc ]
 
-mapCellActions player loc (ElectricCompany (FreePlot x)) =
-   [ BuyPlot player loc ]
+mapExplicitCellActions playerId loc (WaterWorks (FreePlot x)) =
+   [ BuyPlot playerId loc ]
 
-mapCellActions player loc (WaterWorks (FreePlot x)) =
-   [ BuyPlot player loc ]
+mapExplicitCellActions playerId loc (Railroad (FreePlot x) _) =
+   [ BuyPlot playerId loc ]
 
-mapCellActions player loc (Railroad (FreePlot x) _) =
-   [ BuyPlot player loc ]
+mapExplicitCellActions playerId _ CommunityChest =
+   [ DrawCommunityChestCard playerId ]
 
-mapCellActions player _ CommunityChest =
-   [ DrawCommunityChestCard player ]
+mapExplicitCellActions playerId _ Change =
+   [ DrawChangeCard playerId ]
 
-mapCellActions player _ Change =
-   [ DrawChangeCard player ]
+mapExplicitCellActions playerId _ (IncomeTax x) =
+   [ BankTransaction playerId (-x) ]
 
-mapCellActions player _ (IncomeTax x) =
-   [ BankTransaction player (-x) ]
+mapExplicitCellActions playerId _ (LuxuryTax x) =
+   [ BankTransaction playerId (-x) ]
 
-mapCellActions player _ (LuxuryTax x) =
-   [ BankTransaction player (-x) ]
+mapExplicitCellActions playerId _ GoToJail =
+   [ StayInJail playerId ]
 
-mapCellActions player _ GoToJail =
-   [ StayInJail player ]
+mapExplicitCellActions _ _ _ =
+   []
 
-mapCellActions _ _ _ =
+mapImplicitCellActions :: PlayerID -> BoardUnit -> Cell -> [Action]
+mapImplicitCellActions playerId _ (Go x) =
+   [ BankTransaction playerId x ]
+
+mapImplicitCellActions _ _ _ =
    []
 
 mapPlayerActions :: PlayerID -> Player -> [Action]
@@ -68,25 +72,70 @@ mapPlayerActions playerId player =
 
 runMonopoly :: RandomGen g => g -> Action-> Monopoly g
 
--- Throws dice and moves player to correct location.
-runMonopoly g (ThrowDice playerId) = do
-   player <- getPlayer playerId
+runMonopoly g (ThrowDice playerId xs)
 
-   let loc = locationOf player
-   let (number, g') = randomR (1, 6) g
+   -- Throw dice the first time.
+   | length xs `mod` 2 == 0 = do
+      player <- getPlayer playerId
 
-   -- Restore all player cards that are not kept back to deck.
-   restoreCommunityChestCardsToDeck playerId
-   restoreChangeCardsToDeck playerId
+      let loc = locationOf player
+      let (number, g') = randomR (1, 6) g
 
-   -- Move player to correct cell.
-   mapM_ (move playerId) $ tail [ loc .. (loc + number) ]
-   return g'
+      runMonopoly g' $ ThrowDice playerId (number : xs)
+
+   -- Throw dice the second time.
+   | otherwise = do
+      player <- getPlayer playerId
+
+      let loc = locationOf player
+      let (number, g') = randomR (1, 6) g
+
+      -- Check if player gets same dice numbers in both throws.
+      if length xs > 2 && all ((==) number) xs
+
+         -- Go to jail if player gets same dice numbers.
+         then runMonopoly g $ StayInJail playerId
+
+         -- Otherwise, move to cell.
+         else do
+
+            -- Restore all player cards that are not kept back to deck.
+            restoreCommunityChestCardsToDeck playerId
+            restoreChangeCardsToDeck playerId
+
+            -- Move player to correct cell.
+            actions <- mapM (move playerId) $ tail [ loc .. (loc + sum (take 2 xs)) ]
+
+            -- Execute implicit actions and allow player to throw again if he/she got
+            -- same dice numbers.
+            foldM runMonopoly g $ concat actions ++ if number == head xs
+                                                      then [ ThrowDice playerId (number : xs) ]
+                                                      else []
 
 -- Executes bank transaction that changes player's bank balance.
 runMonopoly g (BankTransaction playerId amount) = do
    modifyPlayer playerId $ \x -> x { bankBalanceOf = bankBalanceOf x + amount }
    return g
+
+-- Buys a plot and does nothing if plot cannot be bought.
+runMonopoly g (BuyPlot playerId i) = do
+   modifyCell i buy
+   return g
+   where
+      buy (Plot (FreePlot x) name group) =
+         Plot (OwnedPlot x playerId []) name group
+
+      buy (ElectricCompany (FreePlot x)) =
+         ElectricCompany (OwnedPlot x playerId [])
+
+      buy (WaterWorks (FreePlot x)) =
+         WaterWorks (OwnedPlot x playerId [])
+
+      buy (Railroad (FreePlot x) name) =
+         Railroad (OwnedPlot x playerId []) name
+
+      buy x =
+         x
 
 -- Draws community chest card from deck.
 runMonopoly g (DrawCommunityChestCard playerId) = do
@@ -144,11 +193,13 @@ restoreChangeCardsToDeck playerId = do
    modifyPlayer playerId $ \x -> x { changeCardsHeldBy = keptCards }
    modify $ \x -> x { changeCardsOf = changeCardsOf x ++ map card heldCards }
 
-move :: PlayerID -> BoardUnit -> Monopoly Cell
+move :: PlayerID -> BoardUnit -> Monopoly [Action]
 move playerId units = do
    i <- wrap units
    modifyPlayer playerId $ \x -> x { locationOf = i }
-   getCell i
+
+   cell <- getCell i
+   return $ mapImplicitCellActions playerId i cell
 
 getCell :: BoardUnit -> Monopoly Cell
 getCell units = do
@@ -162,6 +213,11 @@ getPlayer playerId = do
    case Map.lookup playerId availablePlayers of
       Just x -> return x
       _ -> fail "Unknown player"
+
+modifyCell :: BoardUnit -> (Cell -> Cell) -> Monopoly ()
+modifyCell i f =
+   modify $ \x -> x { cellsOf = let cells = cellsOf x
+                                in cells // [ (i, f $ cells ! i) ] }
 
 modifyPlayer :: PlayerID -> (Player -> Player) -> Monopoly ()
 modifyPlayer playerId f = do

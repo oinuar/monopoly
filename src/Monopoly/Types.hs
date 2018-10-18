@@ -68,7 +68,7 @@ data ChangeCard =
 data Action =
 
             -- Throws a dice.
-              ThrowDice PlayerID
+              ThrowDice PlayerID [ Integer ]
 
             -- Receives or gives out money.
             | BankTransaction PlayerID Money
