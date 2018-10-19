@@ -76,14 +76,8 @@ data Action =
             -- Buys a plot at given board index.
             | BuyPlot PlayerID BoardUnit
 
-            -- Buys a house for a plot at given board index.
-            | BuyHouse PlayerID BoardUnit
-
-            -- Buys a hotel for a plot at given board index.
-            | BuyHotel PlayerID BoardUnit
-
-            -- Pays plot rent.
-            | PayRent PlayerID BoardUnit
+            -- Buys a plot item for plot at given board index.
+            | BuyPlotItem PlayerID BoardUnit PlotItem
 
             -- Draws community chest card from deck.
             | DrawCommunityChestCard PlayerID

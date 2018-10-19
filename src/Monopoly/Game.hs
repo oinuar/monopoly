@@ -20,7 +20,8 @@ evalMonopoly player = do
    let loc = locationOf player
    cell <- getCell loc
 
-   return $ mapExplicitCellActions playerId loc cell ++ mapPlayerActions playerId player
+   return $  mapExplicitCellActions playerId loc cell
+          ++ mapPlayerActions playerId player
 
 mapExplicitCellActions :: PlayerID -> BoardUnit -> Cell -> [Action]
 mapExplicitCellActions playerId loc (Plot (FreePlot x) _ group) =
@@ -90,10 +91,10 @@ runMonopoly g (ThrowDice playerId xs)
       let loc = locationOf player
       let (number, g') = randomR (1, 6) g
 
-      -- Check if player gets same dice numbers in both throws.
-      if length xs > 2 && all ((==) number) xs
+      -- Check if player has thrown doubles twice.
+      if length xs > 2 && number == head xs
 
-         -- Go to jail if player gets same dice numbers.
+         -- Go to jail with two consecutive double throws.
          then runMonopoly g $ StayInJail playerId
 
          -- Otherwise, move to cell.
@@ -103,11 +104,12 @@ runMonopoly g (ThrowDice playerId xs)
             restoreCommunityChestCardsToDeck playerId
             restoreChangeCardsToDeck playerId
 
-            -- Move player to correct cell.
+            -- Move player to correct cell by taking sum of two previous dice throws.
             actions <- mapM (move playerId) $ tail [ loc .. (loc + sum (take 2 xs)) ]
 
             -- Execute implicit actions and allow player to throw again if he/she got
-            -- same dice numbers.
+            -- doubles.
+            -- TODO: is it optional to throw again on doubles?
             foldM runMonopoly g $ concat actions ++ if number == head xs
                                                       then [ ThrowDice playerId (number : xs) ]
                                                       else []
@@ -119,20 +121,40 @@ runMonopoly g (BankTransaction playerId amount) = do
 
 -- Buys a plot and does nothing if plot cannot be bought.
 runMonopoly g (BuyPlot playerId i) = do
+   -- TODO: do bank transaction that withdraws money from player.
    modifyCell i buy
    return g
    where
-      buy (Plot (FreePlot x) name group) =
-         Plot (OwnedPlot x playerId []) name group
+      buy (Plot (FreePlot value) name group) =
+         Plot (OwnedPlot value playerId []) name group
 
-      buy (ElectricCompany (FreePlot x)) =
-         ElectricCompany (OwnedPlot x playerId [])
+      buy (ElectricCompany (FreePlot value)) =
+         ElectricCompany (OwnedPlot value playerId [])
 
-      buy (WaterWorks (FreePlot x)) =
-         WaterWorks (OwnedPlot x playerId [])
+      buy (WaterWorks (FreePlot value)) =
+         WaterWorks (OwnedPlot value playerId [])
 
-      buy (Railroad (FreePlot x) name) =
-         Railroad (OwnedPlot x playerId []) name
+      buy (Railroad (FreePlot value) name) =
+         Railroad (OwnedPlot value playerId []) name
+
+      buy x =
+         x
+
+-- Buys an item to plot and does nothing if item cannot be bought.
+runMonopoly g (BuyPlotItem playerId i item) = do
+   -- TODO: do bank transaction that withdraws money from player.
+   modifyCell i buy
+   return g
+   where
+      buy x@(Plot (OwnedPlot value ownerId xs) name group)
+
+         -- Add item to plot if plot is owned by the player.
+         | ownerId == playerId =
+            Plot (OwnedPlot value ownerId $ item : xs) name group
+
+         -- Otherwise, do not modify the plot.
+         | otherwise =
+            x
 
       buy x =
          x
