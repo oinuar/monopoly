@@ -17,7 +17,7 @@ data PlotGroup = Brown
                | Yellow
                | Green
                | Blue
-               deriving (Eq, Ord)
+               deriving (Eq, Ord, Show)
 
 -- Plot owner can build houses and hotels to plot. Plot items can be sorted: a hotel is more valuable than a house.
 data PlotItem = House

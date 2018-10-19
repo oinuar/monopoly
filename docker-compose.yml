@@ -1,16 +1,8 @@
 version: "3"
 services:
-  native:
-    command: cabal run
-    build: 
-        context: .
-        dockerfile: Dockerfile
-    volumes:
-      - ./src:/usr/src/monopoly/src
-
   ghcjs:
-    build: 
-        context: .
-        dockerfile: Dockerfile-ghcjs
+    command: cabal build
+    build: .
     volumes:
       - ./src:/usr/src/monopoly/src
+      - ./dist/ghcjs:/usr/src/monopoly/dist

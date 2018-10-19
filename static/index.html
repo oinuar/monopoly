@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+   <title>Monopoly</title>
+   <meta charset="utf-8">
+   <script language="javascript" src="all.js"></script>
+
+   <style>
+      body, html {
+         padding: 0;
+         margin: 0;
+         height: 100%;
+      }
+
+      body {
+         font-family: 'Franklin Gothic Medium', 'Arial Narrow', Arial, sans-serif;
+         display: flex;
+      }
+
+      section#board {
+         height: 100%;
+         width: 70%;
+      }
+
+      .cell {
+         height: 33%;
+         border-bottom: 4px solid #000;
+         border-right: 4px solid #000;
+         display: flex;
+         flex-direction: row;
+         flex-wrap: nowrap;
+         justify-content: flex-start;
+      }
+
+      .cell > .content {
+         font-size: 4rem;
+         width: 100%;
+         text-align: center;
+         display: flex;
+         flex-direction: column;
+         justify-content: space-evenly;
+      }
+
+      .cell > .content > h1 {
+         text-transform: uppercase;
+      }
+
+      .cell > .panel {
+         height: 100%;
+         width: 25%;
+      }
+
+      .cell.plot > .content {
+         background-color: azure;
+      }
+
+      .cell.plot > .panel {
+         border-right: 4px solid #000;
+      }
+
+      .cell.plot.brown > .panel {
+         background-color: burlywood;
+      }
+
+      .cell.plot.lightblue > .panel {
+         background-color: lightblue;
+      }
+
+      .cell.plot.purple > .panel {
+         background-color: purple;
+      }
+
+      .cell.plot.orange > .panel {
+         background-color: orange;
+      }
+
+      .cell.plot.red > .panel {
+         background-color: red;
+      }
+
+      .cell.plot.yellow > .panel {
+         background-color: yellow;
+      }
+
+      .cell.plot.green > .panel {
+         background-color: green;
+      }
+
+      .cell.plot.blue > .panel {
+         background-color: blue;
+      }
+   </style>
+
+   <script>
+
+      function addGoCell() {
+         var board = document.getElementById("board");
+         var cell = document.createElement("article");
+         var content = createContentNode();
+         var h1 = document.createElement("h1");
+
+         cell.className = "cell";
+
+         h1.textContent = "go!";
+
+         content.appendChild(h1);
+
+         cell.appendChild(createPanelNode());
+         cell.appendChild(content);
+
+         board.appendChild(cell);
+      }
+
+      function addPlotCell(group, name, value) {
+         var board = document.getElementById("board");
+         var cell = document.createElement("article");
+         var content = createContentNode();
+         var h1 = document.createElement("h1");
+         var div = document.createElement("div");
+
+         cell.className = ["cell", "plot", group.toLowerCase()].join(" ");
+
+         h1.textContent = name;
+         div.textContent = value;
+
+         content.appendChild(h1);
+         content.appendChild(div);
+
+         cell.appendChild(createPanelNode());
+         cell.appendChild(content);
+
+         board.appendChild(cell);
+      }
+
+      function addCommunityChestCell() {
+         var board = document.getElementById("board");
+         var cell = document.createElement("article");
+         var content = createContentNode();
+         var h1 = document.createElement("h1");
+
+         cell.className = "cell";
+
+         h1.textContent = "community chest";
+
+         content.appendChild(h1);
+
+         cell.appendChild(createPanelNode());
+         cell.appendChild(content);
+
+         board.appendChild(cell);
+      }
+
+      function addChangeCell() {
+         var board = document.getElementById("board");
+         var cell = document.createElement("article");
+         var content = createContentNode();
+         var h1 = document.createElement("h1");
+
+         cell.className = "cell";
+
+         h1.textContent = "change";
+
+         content.appendChild(h1);
+
+         cell.appendChild(createPanelNode());
+         cell.appendChild(content);
+
+         board.appendChild(cell);
+      }
+
+      function addIncomeTaxCell(value) {
+         var board = document.getElementById("board");
+         var cell = document.createElement("article");
+         var content = createContentNode();
+         var h1 = document.createElement("h1");
+         var div = document.createElement("div");
+
+         cell.className = "cell";
+
+         h1.textContent = "income tax";
+         div.textContent = value;
+
+         content.appendChild(h1);
+         content.appendChild(div);
+
+         cell.appendChild(createPanelNode());
+         cell.appendChild(content);
+
+         board.appendChild(cell);
+      }
+
+      function addLuxuryTaxCell(value) {
+         var board = document.getElementById("board");
+         var cell = document.createElement("article");
+         var content = createContentNode();
+         var h1 = document.createElement("h1");
+         var div = document.createElement("div");
+
+         cell.className = "cell";
+
+         h1.textContent = "luxury tax";
+         div.textContent = value;
+
+         content.appendChild(h1);
+         content.appendChild(div);
+
+         cell.appendChild(createPanelNode());
+         cell.appendChild(content);
+
+         board.appendChild(cell);
+      }
+
+      function addRailroadCell(name, value) {
+         var board = document.getElementById("board");
+         var cell = document.createElement("article");
+         var content = createContentNode();
+         var h1 = document.createElement("h1");
+         var div = document.createElement("div");
+
+         cell.className = ["cell", "plot"].join(" ");
+
+         h1.textContent = name;
+         div.textContent = value;
+
+         content.appendChild(h1);
+         content.appendChild(div);
+
+         cell.appendChild(createPanelNode());
+         cell.appendChild(content);
+
+         board.appendChild(cell);
+      }
+
+      function addElectricCompanyCell(value) {
+         var board = document.getElementById("board");
+         var cell = document.createElement("article");
+         var content = createContentNode();
+         var h1 = document.createElement("h1");
+         var div = document.createElement("div");
+
+         cell.className = "cell";
+
+         h1.textContent = "electric company";
+         div.textContent = value;
+
+         content.appendChild(h1);
+         content.appendChild(div);
+
+         cell.appendChild(createPanelNode());
+         cell.appendChild(content);
+
+         board.appendChild(cell);
+      }
+
+      function addWaterWorksCell(value) {
+         var board = document.getElementById("board");
+         var cell = document.createElement("article");
+         var content = createContentNode();
+         var h1 = document.createElement("h1");
+         var div = document.createElement("div");
+
+         cell.className = "cell";
+
+         h1.textContent = "electric company";
+         div.textContent = value;
+
+         content.appendChild(h1);
+         content.appendChild(div);
+
+         cell.appendChild(createPanelNode());
+         cell.appendChild(content);
+
+         board.appendChild(cell);
+      }
+
+      function addVisitJailCell() {
+         var board = document.getElementById("board");
+         var cell = document.createElement("article");
+         var content = createContentNode();
+         var h1 = document.createElement("h1");
+
+         cell.className = "cell";
+
+         h1.textContent = "visit jail";
+
+         content.appendChild(h1);
+
+         cell.appendChild(createPanelNode());
+         cell.appendChild(content);
+
+         board.appendChild(cell);
+      }
+
+      function addFreeParkingCell() {
+         var board = document.getElementById("board");
+         var cell = document.createElement("article");
+         var content = createContentNode();
+         var h1 = document.createElement("h1");
+
+         cell.className = "cell";
+
+         h1.textContent = "free parking";
+
+         content.appendChild(h1);
+
+         cell.appendChild(createPanelNode());
+         cell.appendChild(content);
+
+         board.appendChild(cell);
+      }
+
+      function addGoToJailCell() {
+         var board = document.getElementById("board");
+         var cell = document.createElement("article");
+         var content = createContentNode();
+         var h1 = document.createElement("h1");
+
+         cell.className = "cell";
+
+         h1.textContent = "go to jail";
+
+         content.appendChild(h1);
+
+         cell.appendChild(createPanelNode());
+         cell.appendChild(content);
+
+         board.appendChild(cell);
+      }
+
+      function createPanelNode() {
+         var node = document.createElement("div");
+
+         node.className = "panel";
+
+         return node;
+      }
+
+      function createContentNode() {
+         var node = document.createElement("div");
+
+         node.className = "content";
+
+         return node;
+      }
+
+   </script>
+</head>
+
+<body>
+   <section id="board"></section>
+
+   <section>
+      dffd
+   </section>
+</body>
+</html>
